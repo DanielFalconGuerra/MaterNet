@@ -3,6 +3,9 @@ namespace MasterNet.Persistence;
 using MasterNet.Domain;
 using Microsoft.EntityFrameworkCore;
 using Bogus;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+
 public class MasterNetDbContext : DbContext
 {
     public DbSet<Curso>? Cursos { get; set; }
@@ -10,14 +13,29 @@ public class MasterNetDbContext : DbContext
     public DbSet<Precio>? Precios { get; set; }
     public DbSet<Calificacion>? Calificaciones { get; set; }
 
+    public MasterNetDbContext(){}
+    public MasterNetDbContext(DbContextOptions<MasterNetDbContext> options) : base(options) { }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.UseSqlite("Data Source=LocalDatabase.db")
-            .LogTo(Console.WriteLine, 
-            new [] { DbLoggerCategory.Database.Command.Name }, 
-            Microsoft.Extensions.Logging.LogLevel.Information)
-            .EnableSensitiveDataLogging();
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
+            .EnableDetailedErrors()
+            .LogTo(Console.WriteLine, LogLevel.Information)
+            .EnableSensitiveDataLogging()
+            .UseAsyncSeeding(async(context, status, cancellationToken) =>
+            {
+                var masterNetDbContext = (MasterNetDbContext)context;
+                var logger = context.GetService<ILogger<MasterNetDbContext>>();
+                
+                try
+                {
+                    await SeedDatabase.SeedPreciosAsync(masterNetDbContext, logger, cancellationToken);
+                }catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Error en el seeding");
+                }
+            });
     }
 
     override protected void OnModelCreating(ModelBuilder modelBuilder)
