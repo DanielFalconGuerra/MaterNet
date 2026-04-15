@@ -1,25 +1,146 @@
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using MasterNet.Domain; // or whatever namespace contains Precio
+using MasterNet.Domain;
+using System.Collections.Frozen;
+using Newtonsoft.Json.Linq; // or whatever namespace contains Precio
 
 namespace MasterNet.Persistence;
 
 public static class SeedDatabase
 {
-    public static async Task SeedPreciosAsync(MasterNetDbContext dbContext, ILogger logger, CancellationToken cancellationToken)
+    public static async Task SeedPreciosAsync(MasterNetDbContext dbContext, ILogger? logger, CancellationToken cancellationToken)
     {
         try
         {
             if(dbContext.Precios is null || dbContext.Precios.Any()) return;
             var jsonString = GetJsonFile("precios.json");
+            if (jsonString is null) return;
             var precios = JsonConvert.DeserializeObject<List<Precio>>(jsonString);
-            if(precios?.Any() == false) return;
+            if(precios is null || precios.Any() == false) return;
             dbContext.Precios.AddRange(precios!);
             await dbContext.SaveChangesAsync(cancellationToken);
 
         }catch (Exception ex)
         {
             logger?.LogWarning(ex, "Fallo cargando la data de precios");
+        }
+    }
+
+    public static async Task SeedInstructoresAsync(MasterNetDbContext dbContext, ILogger logger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if(dbContext.Instructores is null || dbContext.Instructores.Any()) return;
+            var jsonString = GetJsonFile("instructores.json");
+            if (jsonString is null) return;
+            var instructores = JsonConvert.DeserializeObject<List<Instructor>>(jsonString);
+            if(instructores is null || instructores.Any() == false) return;
+            dbContext.Instructores.AddRange(instructores!);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+        }catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Fallo cargando la data de instructores");
+        }
+    }
+
+    public static async Task SeedCursosAsync(MasterNetDbContext dbContext, ILogger logger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if(dbContext.Cursos is null || dbContext.Cursos.Any()) return;
+            var jsonString = GetJsonFile("cursos.json");
+            
+            if(string.IsNullOrEmpty(jsonString)) return;
+            var instructores = dbContext.Instructores!.ToFrozenDictionary(i => i.Id, i => i);
+            var precios = dbContext.Precios!.ToFrozenDictionary(p => p.Id, p => p);
+
+            var arrayCursos = JArray.Parse(jsonString);
+            var cursosDb = new List<Curso>();
+            foreach(var obj in arrayCursos)
+            {
+                var idString = obj["Id"]?.ToString();
+                if(!Guid.TryParse(idString, out var id))
+                {
+                    id = Guid.NewGuid();
+                }
+                else
+                {
+                    var titulo = obj["Titulo"]?.ToString();
+                    var descripcion = obj["Descripcion"]?.ToString();
+                    DateTime? fechaPublicacion = null;
+                    var fechaPublicacionStr = obj["FechaPublicacion"]?.ToString();
+                    if(!string.IsNullOrWhiteSpace(fechaPublicacionStr) && DateTime.TryParse(fechaPublicacionStr, out var fecha))
+                    {
+                        fechaPublicacion = fecha;
+                    }
+                    var curso = new Curso
+                    {
+                        Id = id,
+                        Titulo = titulo,
+                        Descripcion = descripcion,
+                        FechaPublicacion = fechaPublicacion,
+                        Calificaciones = new List<Calificacion>(),
+                        Precios = new List<Precio>(),
+                        CursoPrecios = new List<CursoPrecio>(),
+                        Instructores = new List<Instructor>(),
+                        CursoInstructores = new List<CursoInstructor>(),
+                        Photos = new List<Photo>()
+                    };
+                    if(obj["Precios"] is JArray preciosC)
+                    {
+                        foreach(var pid in preciosC)
+                        {
+                            var idt = new Guid(pid?.ToString()!);
+                            if(precios.TryGetValue(idt, out var precio))
+                            {
+                                curso.Precios.Add(precio);
+                            }
+                        }
+                    }
+                    if(obj["Instructores"] is JArray instructoresC)
+                    {
+                        foreach(var iid in instructoresC)
+                        {
+                            var idt = new Guid(iid?.ToString()!);
+                            if(instructores.TryGetValue(idt, out var instructor))
+                            {
+                                curso.Instructores.Add(instructor);
+                            }
+                        }
+                    }
+                    cursosDb.Add(curso);
+                }
+            }
+            await dbContext.Cursos.AddRangeAsync(cursosDb, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+        }catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Fallo cargando la data de cursos");
+        }
+    }
+
+    public static async Task SeedCalificacionesAsync(MasterNetDbContext dbContext, ILogger logger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if(dbContext.Calificaciones is null || dbContext.Calificaciones.Any()) return;
+            var jsonString = GetJsonFile("calificaciones.json");
+            var calificaciones = JsonConvert.DeserializeObject<List<Calificacion>>(jsonString);
+            if(calificaciones is null || calificaciones.Any() == false) return;
+
+            foreach(var ca in calificaciones!)
+            {
+                ca.Curso = null;
+            }
+
+            dbContext.Calificaciones.AddRange(calificaciones!);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+        }catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Fallo cargando la data de calificaciones");
         }
     }
 

@@ -31,11 +31,30 @@ public class MasterNetDbContext : DbContext
                 try
                 {
                     await SeedDatabase.SeedPreciosAsync(masterNetDbContext, logger, cancellationToken);
+                    await SeedDatabase.SeedInstructoresAsync(masterNetDbContext, logger, cancellationToken);
+                    await SeedDatabase.SeedCursosAsync(masterNetDbContext, logger, cancellationToken);
+                    await SeedDatabase.SeedCalificacionesAsync(masterNetDbContext, logger, cancellationToken);
                 }catch (Exception ex)
                 {
                     logger?.LogError(ex, "Error en el seeding");
                 }
-            });
+            })
+            .UseSeeding((context, status) =>
+        {
+            var masterNetDbContext = (MasterNetDbContext)context;
+            var logger = context.GetService<ILogger<MasterNetDbContext>>();
+            try
+            {
+                SeedDatabase.SeedPreciosAsync(masterNetDbContext, logger, CancellationToken.None).GetAwaiter().GetResult();
+                SeedDatabase.SeedInstructoresAsync(masterNetDbContext, logger, CancellationToken.None).GetAwaiter().GetResult();
+                SeedDatabase.SeedCursosAsync(masterNetDbContext, logger, CancellationToken.None).GetAwaiter().GetResult();
+                SeedDatabase.SeedCalificacionesAsync(masterNetDbContext, logger, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Error en el seeding síncrono");
+            }
+        });
     }
 
     override protected void OnModelCreating(ModelBuilder modelBuilder)
@@ -112,7 +131,7 @@ public class MasterNetDbContext : DbContext
                 }
             );
 
-        modelBuilder.Entity<Curso>()
+        /* modelBuilder.Entity<Curso>()
             .HasData(
                 DataMaster().Item1
             );
@@ -123,7 +142,7 @@ public class MasterNetDbContext : DbContext
         modelBuilder.Entity<Precio>()
             .HasData(
                 DataMaster().Item3
-            );
+            );*/
     }
 
     public Tuple<Curso[], Instructor[], Precio[]> DataMaster()
