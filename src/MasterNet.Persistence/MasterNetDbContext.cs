@@ -5,8 +5,11 @@ using Microsoft.EntityFrameworkCore;
 using Bogus;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using MasterNet.Persistence.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
-public class MasterNetDbContext : DbContext
+
+public class MasterNetDbContext : IdentityDbContext<AppUser>
 {
     public DbSet<Curso>? Cursos { get; set; }
     public DbSet<Instructor>? Instructores { get; set; }
